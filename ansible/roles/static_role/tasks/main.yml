@@ -1,0 +1,81 @@
+---
+
+- name: Update package lists and install necessary packages
+  apt:
+    update_cache: yes
+    name: 
+      - docker.io
+      - haproxy
+    state: present
+
+
+- name: Create index.php template
+  template:
+    src: index.php.j2
+    dest: index.php
+
+
+- name: Replace index.php
+  shell: |
+    META_IP_STRING=$(curl \
+      "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip" \
+        -H "Metadata-Flavor: Google")
+    META_REGION_STRING=$(curl \
+      "http://metadata.google.internal/computeMetadata/v1/instance/zone" \
+        -H "Metadata-Flavor: Google")
+
+    IP=`echo "$META_IP_STRING" | awk -F/ '{print $0}'`
+    REGION=`echo "$META_REGION_STRING" | awk -F/ '{print $4}'`
+
+    sed -i "s|ip-here|$IP|" index.php
+    sed -i "s|region-here|$REGION|" index.php
+
+
+- name: Check if web.dockerfile exists
+  stat:
+    path: web.dockerfile
+  register: dockerfile_stat
+
+
+- name: Create web.dockerfile if it doesn't exist
+  template:
+    src: web.dockerfile.j2
+    dest: web.dockerfile
+  when: dockerfile_stat.stat.exists == false
+
+
+- name: Create Docker Image
+  shell: |
+    IMAGE_NAME=monolith_webapp_svc
+    IMAGE_VERSION=1.0
+    if sudo docker images $IMAGE_NAME:$IMAGE_VERSION | grep -q $IMAGE_NAME; then
+      sudo docker image rmi --force $IMAGE_NAME:$IMAGE_VERSION
+    fi
+    sudo docker build --tag $IMAGE_NAME:$IMAGE_VERSION --file web.dockerfile .
+
+
+- name: Create and Start Docker Containers
+  shell: |
+    IMAGE_NAME=monolith_webapp_svc
+    IMAGE_VERSION=1.0
+    for i in $(seq 0 9); do
+        PORT=$((8000 + i))
+        CONTAINER_NAME="monolith_webapp_svc-$i"
+        if sudo docker ps -a --format '{{"{{.Names}}"}}' | grep -q $CONTAINER_NAME; then
+            sudo docker container stop $CONTAINER_NAME
+            sudo docker container rm --force $CONTAINER_NAME
+        fi
+        sudo docker container create --name $CONTAINER_NAME \
+          -p "$PORT:80" $IMAGE_NAME:$IMAGE_VERSION
+        sudo docker container start $CONTAINER_NAME
+    done
+
+
+- name: Create haproxy.cfg if not exists
+  template:
+    src: haproxy.cfg.j2
+    dest: haproxy.cfg
+
+
+- name: Start HAProxy
+  command: haproxy -f haproxy.cfg

@@ -1,0 +1,14 @@
+# node
+node_modules
+
+# vercel
+.vercel
+
+# SSH Private Key
+./keys/instance-key-sg
+./keys/instance-key-id
+./keys/instance-key-ge
+./keys/instance-key-en
+
+# terraform
+provisions/.terraform/providers

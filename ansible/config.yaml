@@ -1,0 +1,7 @@
+---
+
+- name: config management in compute engine
+  hosts: static_role_vm
+  become: yes
+  roles:
+    - static_role

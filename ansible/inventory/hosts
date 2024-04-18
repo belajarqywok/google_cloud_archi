@@ -1,0 +1,6 @@
+[static_role_vm]
+34.126.101.254 ansible_ssh_private_key_file=./../keys/instance-key-sg
+34.159.122.7 ansible_ssh_private_key_file=./../keys/instance-key-ge
+
+[all:vars]
+ansible_user=c211bsy3776
